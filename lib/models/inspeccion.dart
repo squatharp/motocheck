@@ -64,3 +64,7 @@ class Inspeccion {
     fecha: fecha,
   );
 }
+extension TipoInspeccionTexto on TipoInspeccion {
+  String get etiqueta =>
+      this == TipoInspeccion.entrega ? 'Entrega' : 'Recepción';
+}

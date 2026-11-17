@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
+
+import 'data/inspeccion_repository.dart';
 import 'data/sqlite_inspeccion_repository.dart';
 import 'models/inspeccion.dart';
+import 'rutas.dart';
+import 'screens/detalle_inspeccion_screen.dart';
+import 'screens/formulario_inspeccion_screen.dart';
+import 'screens/lista_inspecciones_screen.dart';
 
-Future<void> main() async {
-  // Necesario para usar plugins (sqflite) antes de runApp
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // --- PRUEBA TEMPORAL ETAPA 1 ---
-  final repo = SqliteInspeccionRepository();
-  final guardada = await repo.guardar(Inspeccion(
-    moto: 'YUC-123',
-    tipo: TipoInspeccion.entrega,
-    observaciones: 'Prueba de guardado',
-    fecha: DateTime.now(),
-  ));
-  final todas = await repo.obtenerTodas();
-  debugPrint('✅ Guardada con id ${guardada.id}. Total en BD: ${todas.length}');
-  // --- FIN PRUEBA ---
+  // Aquí se decide QUÉ implementación usar. Las pantallas solo
+  // conocen la interfaz InspeccionRepository (inyección de dependencias).
+  final InspeccionRepository repositorio = SqliteInspeccionRepository();
 
-  runApp(const MotoCheckApp());
+  runApp(MotoCheckApp(repositorio: repositorio));
 }
 
 class MotoCheckApp extends StatelessWidget {
-  const MotoCheckApp({super.key});
+  final InspeccionRepository repositorio;
+
+  const MotoCheckApp({super.key, required this.repositorio});
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +29,35 @@ class MotoCheckApp extends StatelessWidget {
       title: 'MotoCheck',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.orange, useMaterial3: true),
-      home: const Scaffold(
-        body: Center(child: Text('MotoCheck - Etapa 1')),
-      ),
+      initialRoute: Rutas.lista,
+      // Construye cada pantalla según el nombre de la ruta
+      // y le pasa lo que necesita (repositorio y argumentos).
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case Rutas.lista:
+            return MaterialPageRoute(
+              builder: (_) => ListaInspeccionesScreen(repositorio: repositorio),
+            );
+          case Rutas.detalle:
+            final inspeccion = settings.arguments as Inspeccion;
+            return MaterialPageRoute<bool>(
+              builder: (_) => DetalleInspeccionScreen(
+                inspeccion: inspeccion,
+                repositorio: repositorio,
+              ),
+            );
+          case Rutas.formulario:
+            return MaterialPageRoute<bool>(
+              builder: (_) => FormularioInspeccionScreen(repositorio: repositorio),
+            );
+          default:
+            return MaterialPageRoute(
+              builder: (_) => const Scaffold(
+                body: Center(child: Text('Ruta no encontrada')),
+              ),
+            );
+        }
+      },
     );
   }
 }
