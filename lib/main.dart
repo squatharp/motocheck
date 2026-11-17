@@ -3,7 +3,7 @@ import 'data/sqlite_inspeccion_repository.dart';
 import 'models/inspeccion.dart';
 
 Future<void> main() async {
-  // Necesario antes de usar plugins (sqflite) antes de runApp
+  // Necesario para usar plugins (sqflite) antes de runApp
   WidgetsFlutterBinding.ensureInitialized();
 
   // --- PRUEBA TEMPORAL ETAPA 1 ---
@@ -19,4 +19,20 @@ Future<void> main() async {
   // --- FIN PRUEBA ---
 
   runApp(const MotoCheckApp());
+}
+
+class MotoCheckApp extends StatelessWidget {
+  const MotoCheckApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'MotoCheck',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: Colors.orange, useMaterial3: true),
+      home: const Scaffold(
+        body: Center(child: Text('MotoCheck - Etapa 1')),
+      ),
+    );
+  }
 }
