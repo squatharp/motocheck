@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import '../data/inspeccion_repository.dart';
 import '../models/inspeccion.dart';
 import '../services/foto_service.dart';
+import '../services/voz_service.dart';
 import '../widgets/fotos_miniaturas.dart';
 
 /// Formulario para registrar una nueva inspección.
 class FormularioInspeccionScreen extends StatefulWidget {
   final InspeccionRepository repositorio;
   final FotoService fotoService;
+  final VozService vozService;
 
   const FormularioInspeccionScreen({
     super.key,
     required this.repositorio,
     required this.fotoService,
+    required this.vozService,
   });
 
   @override
@@ -33,12 +36,15 @@ class _FormularioInspeccionScreenState
   bool _guardando = false;
   bool _guardado = false;
 
+  // --- Dictado ---
+  bool _escuchando = false;
+  String _textoAntesDeDictar = '';
+
   @override
   void dispose() {
+    if (widget.vozService.escuchando) widget.vozService.cancelar();
     _motoCtrl.dispose();
     _observacionesCtrl.dispose();
-    // Si el usuario salió sin guardar, borramos las fotos que tomó
-    // para no dejar archivos huérfanos ocupando espacio.
     if (!_guardado) widget.fotoService.eliminarFotos(List.of(_fotos));
     super.dispose();
   }
@@ -47,7 +53,47 @@ class _FormularioInspeccionScreenState
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
   }
 
-  /// Recibe la función a usar (tomarFoto o elegirDeGaleria).
+  // ===================== DICTADO =====================
+
+  Future<void> _alternarDictado() async {
+    if (_escuchando) {
+      await widget.vozService.detener();
+      return;
+    }
+
+    // Guardamos lo que ya estaba escrito para AGREGAR el dictado al final
+    _textoAntesDeDictar = _observacionesCtrl.text.trim();
+
+    try {
+      await widget.vozService.escuchar(
+        onResultado: _alRecibirTexto,
+        onEstado: (escuchando) {
+          if (mounted) setState(() => _escuchando = escuchando);
+        },
+        onError: (mensaje) {
+          if (mounted) _mostrarMensaje(mensaje);
+        },
+      );
+    } on VozException catch (e) {
+      if (!mounted) return;
+      setState(() => _escuchando = false);
+      _mostrarMensaje(e.mensaje);
+    }
+  }
+
+  /// Se llama muchas veces mientras hablas (resultados parciales).
+  void _alRecibirTexto(String texto, bool esFinal) {
+    final separador = _textoAntesDeDictar.isEmpty ? '' : ' ';
+    final nuevo = '$_textoAntesDeDictar$separador$texto';
+
+    _observacionesCtrl.value = TextEditingValue(
+      text: nuevo,
+      selection: TextSelection.collapsed(offset: nuevo.length), // cursor al final
+    );
+  }
+
+  // ===================== FOTOS =====================
+
   Future<void> _agregarFoto(Future<String?> Function() obtener) async {
     if (_fotos.length >= _maxFotos) {
       _mostrarMensaje('Máximo $_maxFotos fotos por inspección');
@@ -55,7 +101,7 @@ class _FormularioInspeccionScreenState
     }
     try {
       final ruta = await obtener();
-      if (ruta == null || !mounted) return; // canceló o salió de la pantalla
+      if (ruta == null || !mounted) return;
       setState(() => _fotos.add(ruta));
     } on FotoException catch (e) {
       if (!mounted) return;
@@ -69,8 +115,11 @@ class _FormularioInspeccionScreenState
     widget.fotoService.eliminarFotos([ruta]);
   }
 
+  // ===================== GUARDAR =====================
+
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_escuchando) await widget.vozService.detener();
 
     setState(() => _guardando = true);
     try {
@@ -93,9 +142,12 @@ class _FormularioInspeccionScreenState
     }
   }
 
+  // ===================== UI =====================
+
   @override
   Widget build(BuildContext context) {
     final estiloTitulo = Theme.of(context).textTheme.titleSmall;
+    final colores = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nueva inspección')),
@@ -140,14 +192,27 @@ class _FormularioInspeccionScreenState
             TextFormField(
               controller: _observacionesCtrl,
               maxLines: 5,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Observaciones',
-                hintText: 'Rayones, golpes, nivel de gasolina...',
+                hintText: _escuchando
+                    ? 'Escuchando... habla ahora'
+                    : 'Rayones, golpes, nivel de gasolina...',
                 alignLabelWithHint: true,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
-            // ETAPA 4: botón de micrófono para dictar observaciones
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: _guardando ? null : _alternarDictado,
+              style: _escuchando
+                  ? FilledButton.styleFrom(
+                backgroundColor: colores.errorContainer,
+                foregroundColor: colores.onErrorContainer,
+              )
+                  : null,
+              icon: Icon(_escuchando ? Icons.stop : Icons.mic),
+              label: Text(_escuchando ? 'Detener dictado' : 'Dictar observaciones'),
+            ),
             const SizedBox(height: 16),
             Text('Fotos (${_fotos.length}/$_maxFotos)', style: estiloTitulo),
             const SizedBox(height: 8),

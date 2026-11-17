@@ -8,6 +8,7 @@ import 'screens/detalle_inspeccion_screen.dart';
 import 'screens/formulario_inspeccion_screen.dart';
 import 'screens/lista_inspecciones_screen.dart';
 import 'services/foto_service.dart';
+import 'services/voz_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,18 +16,25 @@ void main() {
   // Dependencias de la app: se crean una vez y se inyectan a las pantallas.
   final InspeccionRepository repositorio = SqliteInspeccionRepository();
   final fotoService = FotoService();
+  final vozService = VozService();
 
-  runApp(MotoCheckApp(repositorio: repositorio, fotoService: fotoService));
+  runApp(MotoCheckApp(
+    repositorio: repositorio,
+    fotoService: fotoService,
+    vozService: vozService,
+  ));
 }
 
 class MotoCheckApp extends StatelessWidget {
   final InspeccionRepository repositorio;
   final FotoService fotoService;
+  final VozService vozService;
 
   const MotoCheckApp({
     super.key,
     required this.repositorio,
     required this.fotoService,
+    required this.vozService,
   });
 
   @override
@@ -56,6 +64,7 @@ class MotoCheckApp extends StatelessWidget {
               builder: (_) => FormularioInspeccionScreen(
                 repositorio: repositorio,
                 fotoService: fotoService,
+                vozService: vozService,
               ),
             );
           default:
