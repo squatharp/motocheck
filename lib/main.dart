@@ -7,21 +7,27 @@ import 'rutas.dart';
 import 'screens/detalle_inspeccion_screen.dart';
 import 'screens/formulario_inspeccion_screen.dart';
 import 'screens/lista_inspecciones_screen.dart';
+import 'services/foto_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Aquí se decide QUÉ implementación usar. Las pantallas solo
-  // conocen la interfaz InspeccionRepository (inyección de dependencias).
+  // Dependencias de la app: se crean una vez y se inyectan a las pantallas.
   final InspeccionRepository repositorio = SqliteInspeccionRepository();
+  final fotoService = FotoService();
 
-  runApp(MotoCheckApp(repositorio: repositorio));
+  runApp(MotoCheckApp(repositorio: repositorio, fotoService: fotoService));
 }
 
 class MotoCheckApp extends StatelessWidget {
   final InspeccionRepository repositorio;
+  final FotoService fotoService;
 
-  const MotoCheckApp({super.key, required this.repositorio});
+  const MotoCheckApp({
+    super.key,
+    required this.repositorio,
+    required this.fotoService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +36,6 @@ class MotoCheckApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.orange, useMaterial3: true),
       initialRoute: Rutas.lista,
-      // Construye cada pantalla según el nombre de la ruta
-      // y le pasa lo que necesita (repositorio y argumentos).
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case Rutas.lista:
@@ -44,11 +48,15 @@ class MotoCheckApp extends StatelessWidget {
               builder: (_) => DetalleInspeccionScreen(
                 inspeccion: inspeccion,
                 repositorio: repositorio,
+                fotoService: fotoService,
               ),
             );
           case Rutas.formulario:
             return MaterialPageRoute<bool>(
-              builder: (_) => FormularioInspeccionScreen(repositorio: repositorio),
+              builder: (_) => FormularioInspeccionScreen(
+                repositorio: repositorio,
+                fotoService: fotoService,
+              ),
             );
           default:
             return MaterialPageRoute(
