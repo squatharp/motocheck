@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/inspeccion_repository.dart';
 import '../models/inspeccion.dart';
 import '../services/foto_service.dart';
+import '../services/ubicacion_service.dart';
 import '../services/voz_service.dart';
 import '../widgets/fotos_miniaturas.dart';
 
@@ -11,12 +12,14 @@ class FormularioInspeccionScreen extends StatefulWidget {
   final InspeccionRepository repositorio;
   final FotoService fotoService;
   final VozService vozService;
+  final UbicacionService ubicacionService;
 
   const FormularioInspeccionScreen({
     super.key,
     required this.repositorio,
     required this.fotoService,
     required this.vozService,
+    required this.ubicacionService,
   });
 
   @override
@@ -35,6 +38,7 @@ class _FormularioInspeccionScreenState
   TipoInspeccion _tipo = TipoInspeccion.entrega;
   bool _guardando = false;
   bool _guardado = false;
+  String _textoBotonGuardar = 'Guardando...';
 
   // --- Dictado ---
   bool _escuchando = false;
@@ -61,7 +65,6 @@ class _FormularioInspeccionScreenState
       return;
     }
 
-    // Guardamos lo que ya estaba escrito para AGREGAR el dictado al final
     _textoAntesDeDictar = _observacionesCtrl.text.trim();
 
     try {
@@ -81,14 +84,13 @@ class _FormularioInspeccionScreenState
     }
   }
 
-  /// Se llama muchas veces mientras hablas (resultados parciales).
   void _alRecibirTexto(String texto, bool esFinal) {
     final separador = _textoAntesDeDictar.isEmpty ? '' : ' ';
     final nuevo = '$_textoAntesDeDictar$separador$texto';
 
     _observacionesCtrl.value = TextEditingValue(
       text: nuevo,
-      selection: TextSelection.collapsed(offset: nuevo.length), // cursor al final
+      selection: TextSelection.collapsed(offset: nuevo.length),
     );
   }
 
@@ -115,25 +117,70 @@ class _FormularioInspeccionScreenState
     widget.fotoService.eliminarFotos([ruta]);
   }
 
+  // ===================== UBICACIÓN =====================
+
+  /// Intenta obtener el GPS. Si falla, pregunta si se guarda sin ubicación.
+  /// Devuelve:
+  ///  - Coordenadas si se obtuvo la ubicación
+  ///  - null si el usuario aceptó guardar sin ubicación
+  ///  - lanza _GuardadoCancelado si el usuario prefirió no guardar
+  Future<Coordenadas?> _obtenerUbicacionOPreguntar() async {
+    try {
+      return await widget.ubicacionService.obtenerUbicacionActual();
+    } on UbicacionException catch (e) {
+      if (!mounted) throw _GuardadoCancelado();
+      final continuar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sin ubicación'),
+          content: Text('${e.mensaje}\n\n¿Quieres guardar la inspección sin ubicación?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar sin ubicación'),
+            ),
+          ],
+        ),
+      );
+      if (continuar != true) throw _GuardadoCancelado();
+      return null;
+    }
+  }
+
   // ===================== GUARDAR =====================
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     if (_escuchando) await widget.vozService.detener();
 
-    setState(() => _guardando = true);
+    setState(() {
+      _guardando = true;
+      _textoBotonGuardar = 'Obteniendo ubicación...';
+    });
+
     try {
+      final coordenadas = await _obtenerUbicacionOPreguntar();
+
+      if (mounted) setState(() => _textoBotonGuardar = 'Guardando...');
+
       await widget.repositorio.guardar(Inspeccion(
         moto: _motoCtrl.text.trim().toUpperCase(),
         tipo: _tipo,
         observaciones: _observacionesCtrl.text.trim(),
         fotos: List.of(_fotos),
+        latitud: coordenadas?.latitud,
+        longitud: coordenadas?.longitud,
         fecha: DateTime.now(),
-        // ETAPA 5: latitud y longitud
       ));
       _guardado = true;
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on _GuardadoCancelado {
+      // El usuario decidió no guardar: no hacemos nada
     } on RepositoryException catch (e) {
       if (!mounted) return;
       _mostrarMensaje(e.mensaje);
@@ -241,7 +288,20 @@ class _FormularioInspeccionScreenState
             ),
             const SizedBox(height: 8),
             FotosMiniaturas(rutas: _fotos, onEliminar: _quitarFoto),
-            const SizedBox(height: 24),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.my_location, size: 16, color: colores.outline),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'La ubicación GPS se registra al guardar',
+                    style: TextStyle(color: colores.outline, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _guardando ? null : _guardar,
               icon: _guardando
@@ -251,7 +311,7 @@ class _FormularioInspeccionScreenState
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
                   : const Icon(Icons.save),
-              label: Text(_guardando ? 'Guardando...' : 'Guardar inspección'),
+              label: Text(_guardando ? _textoBotonGuardar : 'Guardar inspección'),
             ),
           ],
         ),
@@ -259,3 +319,6 @@ class _FormularioInspeccionScreenState
     );
   }
 }
+
+/// Señal interna: el usuario decidió no guardar.
+class _GuardadoCancelado implements Exception {}

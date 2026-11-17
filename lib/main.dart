@@ -8,6 +8,7 @@ import 'screens/detalle_inspeccion_screen.dart';
 import 'screens/formulario_inspeccion_screen.dart';
 import 'screens/lista_inspecciones_screen.dart';
 import 'services/foto_service.dart';
+import 'services/ubicacion_service.dart';
 import 'services/voz_service.dart';
 
 void main() {
@@ -17,11 +18,13 @@ void main() {
   final InspeccionRepository repositorio = SqliteInspeccionRepository();
   final fotoService = FotoService();
   final vozService = VozService();
+  final ubicacionService = UbicacionService();
 
   runApp(MotoCheckApp(
     repositorio: repositorio,
     fotoService: fotoService,
     vozService: vozService,
+    ubicacionService: ubicacionService,
   ));
 }
 
@@ -29,12 +32,14 @@ class MotoCheckApp extends StatelessWidget {
   final InspeccionRepository repositorio;
   final FotoService fotoService;
   final VozService vozService;
+  final UbicacionService ubicacionService;
 
   const MotoCheckApp({
     super.key,
     required this.repositorio,
     required this.fotoService,
     required this.vozService,
+    required this.ubicacionService,
   });
 
   @override
@@ -57,6 +62,7 @@ class MotoCheckApp extends StatelessWidget {
                 inspeccion: inspeccion,
                 repositorio: repositorio,
                 fotoService: fotoService,
+                ubicacionService: ubicacionService,
               ),
             );
           case Rutas.formulario:
@@ -65,6 +71,7 @@ class MotoCheckApp extends StatelessWidget {
                 repositorio: repositorio,
                 fotoService: fotoService,
                 vozService: vozService,
+                ubicacionService: ubicacionService,
               ),
             );
           default:

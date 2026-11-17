@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../data/inspeccion_repository.dart';
 import '../models/inspeccion.dart';
 import '../services/foto_service.dart';
+import '../services/ubicacion_service.dart';
 import '../widgets/fotos_miniaturas.dart';
 import '../widgets/inspeccion_imagen.dart';
 import 'foto_completa_screen.dart';
@@ -13,12 +14,14 @@ class DetalleInspeccionScreen extends StatelessWidget {
   final Inspeccion inspeccion;
   final InspeccionRepository repositorio;
   final FotoService fotoService;
+  final UbicacionService ubicacionService;
 
   const DetalleInspeccionScreen({
     super.key,
     required this.inspeccion,
     required this.repositorio,
     required this.fotoService,
+    required this.ubicacionService,
   });
 
   Future<void> _eliminar(BuildContext context) async {
@@ -43,7 +46,7 @@ class DetalleInspeccionScreen extends StatelessWidget {
 
     try {
       await repositorio.eliminar(inspeccion.id!);
-      await fotoService.eliminarFotos(inspeccion.fotos); // borra los archivos
+      await fotoService.eliminarFotos(inspeccion.fotos);
       if (!context.mounted) return;
       Navigator.pop(context, true);
     } on RepositoryException catch (e) {
@@ -54,13 +57,25 @@ class DetalleInspeccionScreen extends StatelessWidget {
   }
 
   void _verFoto(BuildContext context, int indice) {
-    // Navegación directa (sin ruta con nombre): pantalla simple de un solo uso
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => FotoCompletaScreen(ruta: inspeccion.fotos[indice]),
       ),
     );
+  }
+
+  Future<void> _abrirMapa(BuildContext context) async {
+    try {
+      await ubicacionService.abrirEnMapas(
+        inspeccion.latitud!,
+        inspeccion.longitud!,
+      );
+    } on UbicacionException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.mensaje)));
+    }
   }
 
   @override
@@ -123,7 +138,14 @@ class DetalleInspeccionScreen extends StatelessWidget {
                 '${inspeccion.longitud!.toStringAsFixed(5)}'
                 : 'Sin ubicación registrada',
           ),
-          // ETAPA 5: botón "Ver en Google Maps"
+          if (inspeccion.tieneUbicacion) ...[
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _abrirMapa(context),
+              icon: const Icon(Icons.map),
+              label: const Text('Ver en Google Maps'),
+            ),
+          ],
         ],
       ),
     );
